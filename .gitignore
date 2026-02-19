@@ -1,0 +1,14 @@
+.latest
+./latest
+/latest
+.env
+.python-version
+.Data
+./DATA
+/DATA
+.stable-env
+./stable-env
+/stable-env
+
+*.csv
+*.tab
