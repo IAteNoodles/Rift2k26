@@ -1,0 +1,54 @@
+{
+  "request_id": "req-edge-cases",
+  "vcf_valid": true,
+  "target_drugs": [
+    "fluorouracil",
+    "simvastatin",
+    "codeine"
+  ],
+  "resolved_profiles": [
+    {
+      "gene": "CYP2D6",
+      "diplotype": "*4+*41/*10",
+      "contributing_rsids": [
+        "rs3892097",
+        "rs1065852",
+        "rs28371725"
+      ],
+      "status": "resolved"
+    },
+    {
+      "gene": "CYP3A5",
+      "diplotype": "*Unknown/*1",
+      "contributing_rsids": [
+        "rs776746"
+      ],
+      "status": "uncertain"
+    },
+    {
+      "gene": "DPYD",
+      "diplotype": "*2A/*2A",
+      "contributing_rsids": [
+        "rs3918290"
+      ],
+      "status": "resolved"
+    },
+    {
+      "gene": "NUDT15",
+      "diplotype": "*3/*3",
+      "contributing_rsids": [
+        "rs116855232"
+      ],
+      "status": "resolved"
+    },
+    {
+      "gene": "SLCO1B1",
+      "diplotype": "*5/*15",
+      "contributing_rsids": [
+        "rs4149056",
+        "rs2306283"
+      ],
+      "status": "resolved"
+    }
+  ]
+}

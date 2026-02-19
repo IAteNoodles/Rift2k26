@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+##reference=GRCh38
+##INFO=<ID=GENE,Number=1,Type=String,Description="Gene symbol">
+##INFO=<ID=STAR,Number=1,Type=String,Description="Star allele designation">
+##INFO=<ID=RS,Number=1,Type=String,Description="dbSNP rsID">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##contig=<ID=chr10,length=133797422>
+##contig=<ID=chr16,length=90338345>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1
+chr10	96521657	rs12248560	C	T	50	PASS	GENE=CYP2C19;STAR=*17;RS=rs12248560	GT	0/1
+chr10	96612495	rs28399504	A	G	50	PASS	GENE=CYP2C19;STAR=*4;RS=rs28399504	GT	0/1
+chr16	31107689	rs9923231	C	T	50	PASS	GENE=VKORC1;RS=rs9923231	GT	1/1

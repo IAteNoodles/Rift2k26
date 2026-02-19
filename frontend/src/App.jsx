@@ -36,6 +36,7 @@ export default function App() {
   const [selectedDrugs, setSelectedDrugs] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [hasResults, setHasResults] = useState(false);
+  const [apiResults, setApiResults] = useState(null);
   const [error, setError] = useState(null);
   const resultsRef = useRef(null);
 
@@ -51,6 +52,7 @@ export default function App() {
     setFile(null);
     setSelectedDrugs([]);
     setHasResults(false);
+    setApiResults(null);
   }, []);
 
   const handleDrugsChange = useCallback((drugs) => {
@@ -58,19 +60,40 @@ export default function App() {
     if (hasResults) setHasResults(false);
   }, [hasResults]);
 
-  const handleAnalyze = useCallback(() => {
+  const handleAnalyze = useCallback(async () => {
     if (!file || selectedDrugs.length === 0) return;
     setAnalyzing(true);
     setHasResults(false);
+    setApiResults(null);
+    setError(null);
 
-    setTimeout(() => {
-      setAnalyzing(false);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('drugs', selectedDrugs.join(','));
+
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/analyze`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Server error (${res.status})`);
+      }
+
+      const data = await res.json();
+      setApiResults(data);
       setHasResults(true);
-      // Scroll to results
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
-    }, 1500);
+    } catch (err) {
+      setError(err.message || 'Analysis failed. Please try again.');
+    } finally {
+      setAnalyzing(false);
+    }
   }, [file, selectedDrugs]);
 
   const handleReset = useCallback(() => {
