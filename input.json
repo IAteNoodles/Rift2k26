@@ -1,0 +1,55 @@
+{
+  "request_id": "req-edge-cases",
+  "vcf_valid": true,
+  "target_drugs": ["fluorouracil", "simvastatin", "codeine"],
+  "extracted_variants": [
+    {
+      "gene_symbol": "DPYD",
+      "rsid": "rs3918290",
+      "extracted_star": "*2A",
+      "raw_genotype_call": "1|1"
+    },
+    {
+      "gene_symbol": "NUDT15",
+      "rsid": "rs116855232",
+      "extracted_star": "*3",
+      "raw_genotype_call": "1/1"
+    },
+    {
+      "gene_symbol": "SLCO1B1",
+      "rsid": "rs4149056",
+      "extracted_star": "*5",
+      "raw_genotype_call": "1|0"
+    },
+    {
+      "gene_symbol": "SLCO1B1",
+      "rsid": "rs2306283",
+      "extracted_star": "*15",
+      "raw_genotype_call": "0|1"
+    },
+    {
+      "gene_symbol": "CYP3A5",
+      "rsid": "rs776746",
+      "extracted_star": "Unknown",
+      "raw_genotype_call": "0/1"
+    },
+    {
+      "gene_symbol": "CYP2D6",
+      "rsid": "rs3892097",
+      "extracted_star": "*4",
+      "raw_genotype_call": "0/1"
+    },
+    {
+      "gene_symbol": "CYP2D6",
+      "rsid": "rs1065852",
+      "extracted_star": "*10",
+      "raw_genotype_call": "0/1"
+    },
+    {
+      "gene_symbol": "CYP2D6",
+      "rsid": "rs28371725",
+      "extracted_star": "*41",
+      "raw_genotype_call": "0/1"
+    }
+  ]
+}
