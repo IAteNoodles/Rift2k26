@@ -26,6 +26,8 @@ CPIC Update Scraping
                                in a raw PGx JSON payload (simple list)
   POST /enrich               → full typed enrichment (EnrichedPayload)
   GET  /enrich/url?url=      → scrape a single CPIC guideline URL
+  GET  /scrape/cpic?url=     → scrape CPIC guideline URL (full scraper)
+  POST /scrape/cpic          → same, with JSON body (url + options)
   GET  /health               → {"status": "ok"}
 ──────────────────────────────────────────────────────────────────────────────
 """
@@ -1038,6 +1040,84 @@ async def enrich_url(
         raise HTTPException(status_code=502, detail=f"Scrape failed: {exc}") from exc
     result = [CpicUpdate(label=u["label"], text=u["text"], pmids=u.get("pmids", [])) for u in raw]
     return result[:1] if most_recent_only else result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CPIC SCRAPER ENDPOINTS  (mirrors cpic_scraper.py)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ScrapeRequest(BaseModel):
+    url: str = Field(..., description="Full CPIC guideline URL to scrape")
+    num_paragraphs: int = Field(4, ge=1, le=20, description="Max paragraphs to collect after the marker")
+    most_recent_only: bool = Field(False, description="Return only the first (most recent) update block")
+
+
+@app.get(
+    "/scrape/cpic",
+    response_model=list[CpicUpdate],
+    summary="Scrape 'Updates since publication' from a CPIC guideline URL (GET)",
+)
+async def scrape_cpic_get(
+    url: str = Query(..., description="Full CPIC guideline URL"),
+    num_paragraphs: int = Query(4, ge=1, le=20, description="Max paragraphs to collect"),
+    most_recent_only: bool = Query(False, description="Return only the most recent update block"),
+) -> list[CpicUpdate]:
+    """
+    GET convenience wrapper around ``scrape_cpic_updates``.
+
+    Example:
+        GET /scrape/cpic?url=https://cpicpgx.org/guidelines/guideline-for-codeine-and-cyp2d6/
+        GET /scrape/cpic?url=...&most_recent_only=true&num_paragraphs=6
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        raw = await loop.run_in_executor(
+            None,
+            lambda: scrape_cpic_updates(url, num_paragraphs=num_paragraphs),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Scrape failed: {exc}") from exc
+
+    updates = [CpicUpdate(label=u["label"], text=u["text"], pmids=u.get("pmids", [])) for u in raw]
+    return updates[:1] if most_recent_only else updates
+
+
+@app.post(
+    "/scrape/cpic",
+    response_model=list[CpicUpdate],
+    summary="Scrape 'Updates since publication' from a CPIC guideline URL (POST)",
+)
+async def scrape_cpic_post(body: ScrapeRequest) -> list[CpicUpdate]:
+    """
+    POST wrapper around ``scrape_cpic_updates`` / ``get_most_recent_update``.
+
+    Request body:
+    ```json
+    {
+      "url": "https://cpicpgx.org/guidelines/guideline-for-codeine-and-cyp2d6/",
+      "num_paragraphs": 4,
+      "most_recent_only": false
+    }
+    ```
+
+    Returns a list of update blocks found after the
+    *"Updates since publication"* marker on the page.
+    Each block contains:
+    - ``label``  – first sentence (up to 120 chars)
+    - ``text``   – full collected text
+    - ``pmids``  – any PMIDs cited in the block
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        raw = await loop.run_in_executor(
+            None,
+            lambda: scrape_cpic_updates(body.url, num_paragraphs=body.num_paragraphs),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Scrape failed: {exc}") from exc
+
+    updates = [CpicUpdate(label=u["label"], text=u["text"], pmids=u.get("pmids", [])) for u in raw]
+    return updates[:1] if body.most_recent_only else updates
 
 
 @app.get("/health", summary="Health check")
