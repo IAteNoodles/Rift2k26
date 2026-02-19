@@ -121,6 +121,22 @@ class LLMGeneratedExplanation(BaseModel):
     per_drug: dict[str, str]
 
 
+class PerDrugLLMExplanation(BaseModel):
+    summary: str = Field(..., description="LLM-generated clinical explanation for this drug")
+
+
+class PerDrugOutput(BaseModel):
+    """Flat per-drug result record — returned as a list (one entry per drug)."""
+    patient_id:                str
+    drug:                      str
+    timestamp:                 str
+    risk_assessment:           RiskAssessment
+    pharmacogenomic_profile:   PharmacogenomicProfile
+    clinical_recommendation:   ClinicalRecommendation
+    llm_generated_explanation: PerDrugLLMExplanation
+    quality_metrics:           QualityMetrics
+
+
 class GenerateResultRequest(BaseModel):
     patient_id: str
     engine_version: Optional[str] = None
@@ -280,20 +296,21 @@ def _enrich_one(result: DrugResult):
 # CORE LOGIC
 # ══════════════════════════════════════════════════════════════
 
-def run_generate_result(payload: GenerateResultRequest):
+def run_generate_result(payload: GenerateResultRequest) -> list[PerDrugOutput]:
+
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         enriched = list(pool.map(_enrich_one, payload.results))
 
-    outputs = []
-    per_drug = {}
+    outputs: list[PerDrugOutput] = []
 
     for r, e in zip(payload.results, enriched):
-        per_drug[r.drug] = e["explanation"]
-
         outputs.append(
-            DrugResultOutput(
+            PerDrugOutput(
+                patient_id=payload.patient_id,
                 drug=r.drug,
+                timestamp=timestamp,
                 risk_assessment=r.risk_assessment,
                 pharmacogenomic_profile=r.pharmacogenomic_profile,
                 clinical_recommendation=ClinicalRecommendation(
@@ -304,45 +321,14 @@ def run_generate_result(payload: GenerateResultRequest):
                     cpic_update=e["explanation"],
                     source=e["source"],
                 ),
+                llm_generated_explanation=PerDrugLLMExplanation(
+                    summary=e["explanation"],
+                ),
+                quality_metrics=payload.quality_metrics,
             )
         )
 
-    lines = [
-        f"- {r.drug}: {r.risk_assessment.risk_label} ({r.risk_assessment.severity}), "
-        f"gene {r.pharmacogenomic_profile.primary_gene}, "
-        f"diplotype {r.pharmacogenomic_profile.diplotype}, "
-        f"phenotype {r.pharmacogenomic_profile.phenotype}"
-        for r in payload.results
-    ]
-    per_drug_block = "\n\n".join(f"{d}:\n{e}" for d, e in per_drug.items())
-
-    summary = _call_llm(
-        (
-            "You are a clinical pharmacogenomics expert. "
-            "Write a short overall clinical summary (2-4 sentences) for a patient with multiple "
-            "pharmacogenomic risk flags. Synthesise all drugs into a single coherent clinical "
-            "picture. Highlight the highest-risk findings and what the clinician should "
-            "prioritise first. Do not repeat per-drug detail — that is shown separately. "
-            "Under 100 words."
-        ),
-        (
-            "Patient drug risk overview:\n" + "\n".join(lines) +
-            "\n\nPer-drug explanations (context only):\n" + per_drug_block
-        ),
-        "See per-drug explanations below.",
-    )
-
-    return GenerateResultOutput(
-        patient_id=payload.patient_id,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        engine_version=payload.engine_version,
-        quality_metrics=payload.quality_metrics,
-        results=outputs,
-        llm_generated_explanation=LLMGeneratedExplanation(
-            summary=summary,
-            per_drug=per_drug,
-        ),
-    )
+    return outputs
 
 
 # ══════════════════════════════════════════════════════════════
@@ -368,7 +354,7 @@ def main(context):
 
         context.log(f"Execution time: {datetime.now()-start}")
 
-        return context.res.json(result.model_dump())
+        return context.res.json([r.model_dump() for r in result])
 
     except Exception as e:
         context.error(str(e))

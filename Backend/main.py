@@ -216,6 +216,20 @@ class DrugResultOutput(BaseModel):
     pharmacogenomic_profile: PharmacogenomicProfile
     clinical_recommendation: ClinicalRecommendation
 
+class PerDrugLLMExplanation(BaseModel):
+    summary: str = Field(..., description="LLM-generated clinical explanation for this drug")
+
+class PerDrugOutput(BaseModel):
+    """Flat per-drug result record returned as a list (one entry per drug)."""
+    patient_id:                str
+    drug:                      str
+    timestamp:                 str
+    risk_assessment:           RiskAssessment
+    pharmacogenomic_profile:   PharmacogenomicProfile
+    clinical_recommendation:   ClinicalRecommendation
+    llm_generated_explanation: PerDrugLLMExplanation
+    quality_metrics:           QualityMetrics
+
 class GenerateResultRequest(BaseModel):
     """Same as PGxPayload but requires patient_id and quality_metrics."""
     patient_id:     str
@@ -1071,10 +1085,10 @@ def _overall_llm_summary(drug_results: list[DrugResult], per_drug: dict[str, str
 
 @app.post(
     "/generate_result",
-    response_model=GenerateResultOutput,
+    response_model=list[PerDrugOutput],
     summary="Generate structured PGx clinical result with LLM explanation",
 )
-async def generate_result(payload: GenerateResultRequest) -> GenerateResultOutput:
+async def generate_result(payload: GenerateResultRequest) -> list[PerDrugOutput]:
     """
     Accepts a PGx payload (with ``patient_id`` and ``quality_metrics``).
     For each drug:
@@ -1082,11 +1096,12 @@ async def generate_result(payload: GenerateResultRequest) -> GenerateResultOutpu
         knowledge if unavailable).
       - Populates ``clinical_recommendation`` from cpic_metadata + update.
 
-    Returns a single structured ``GenerateResultOutput`` with:
-      - Backend-stamped ISO-8601 timestamp
-      - Per-drug ``clinical_recommendation`` (Pydantic-validated)
-      - ``llm_generated_explanation.per_drug`` – one explanation per drug
-      - ``llm_generated_explanation.summary`` – overall patient-level synthesis
+    Returns a **list** of ``PerDrugOutput`` objects — one per drug — each with:
+      - ``patient_id``, ``drug``, ``timestamp`` (ISO-8601, backend-stamped)
+      - ``risk_assessment``, ``pharmacogenomic_profile``
+      - ``clinical_recommendation``
+      - ``llm_generated_explanation.summary`` – per-drug LLM explanation
+      - ``quality_metrics``
     """
     from datetime import datetime, timezone
 
@@ -1094,8 +1109,7 @@ async def generate_result(payload: GenerateResultRequest) -> GenerateResultOutpu
              payload.patient_id, len(payload.results))
 
     url_cache: dict = {}
-    drug_outputs:  list[DrugResultOutput] = []
-    per_drug_map:  dict[str, str]         = {}
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     # ── per-drug enrichment (parallel) ──────────────────────────────────────
     loop = asyncio.get_event_loop()
@@ -1106,14 +1120,13 @@ async def generate_result(payload: GenerateResultRequest) -> GenerateResultOutpu
         ]
         raw_enriched = await asyncio.gather(*tasks)
 
+    drug_outputs: list[PerDrugOutput] = []
+
     for result, enriched in zip(payload.results, raw_enriched):
         drug        = result.drug
         explanation = enriched["explanation"]
         source_tag  = enriched["source"]
 
-        per_drug_map[drug] = explanation
-
-        # ── ClinicalRecommendation: Pydantic-validated, never garbage ─────────
         meta = result.cpic_metadata
         clinical_rec = ClinicalRecommendation(
             guideline_name      = meta.guideline_name,
@@ -1124,27 +1137,18 @@ async def generate_result(payload: GenerateResultRequest) -> GenerateResultOutpu
             source              = source_tag,
         )
 
-        drug_outputs.append(DrugResultOutput(
-            drug                    = drug,
-            risk_assessment         = result.risk_assessment,
-            pharmacogenomic_profile = result.pharmacogenomic_profile,
-            clinical_recommendation = clinical_rec,
+        drug_outputs.append(PerDrugOutput(
+            patient_id                = payload.patient_id,
+            drug                      = drug,
+            timestamp                 = timestamp,
+            risk_assessment           = result.risk_assessment,
+            pharmacogenomic_profile   = result.pharmacogenomic_profile,
+            clinical_recommendation   = clinical_rec,
+            llm_generated_explanation = PerDrugLLMExplanation(summary=explanation),
+            quality_metrics           = payload.quality_metrics,
         ))
 
-    # ── overall LLM summary ──────────────────────────────────────────────
-    overall_summary = _overall_llm_summary(payload.results, per_drug_map)
-
-    return GenerateResultOutput(
-        patient_id               = payload.patient_id,
-        timestamp                = datetime.now(timezone.utc).isoformat(),
-        engine_version           = payload.engine_version,
-        quality_metrics          = payload.quality_metrics,
-        results                  = drug_outputs,
-        llm_generated_explanation = LLMGeneratedExplanation(
-            summary  = overall_summary,
-            per_drug = per_drug_map,
-        ),
-    )
+    return drug_outputs
 
 
 # ══════════════════════════════════════════════════════════════════════════════
