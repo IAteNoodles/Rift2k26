@@ -1,0 +1,93 @@
+.risk-summary {
+  margin-bottom: var(--space-10);
+}
+
+.section-heading {
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-1);
+}
+
+.section-desc {
+  font-size: var(--text-sm);
+  color: var(--slate-500);
+  margin-bottom: var(--space-6);
+}
+
+/* Cards grid */
+.risk-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+}
+
+@media (max-width: 900px) {
+  .risk-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.risk-card {
+  border-radius: var(--radius-lg);
+  border-left: 4px solid;
+  padding: var(--space-5);
+  transition: box-shadow var(--duration-base) ease, transform var(--duration-base) var(--ease-out);
+}
+
+.risk-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.risk-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.risk-card-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.risk-card-title {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.risk-card-count {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.risk-card-drugs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.risk-drug-chip {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+}
+
+.risk-card-empty {
+  font-size: var(--text-sm);
+  font-style: italic;
+  opacity: 0.5;
+  margin-bottom: var(--space-3);
+}
+
+.risk-card-desc {
+  font-size: var(--text-xs);
+  opacity: 0.7;
+  line-height: 1.5;
+}
