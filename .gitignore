@@ -12,3 +12,12 @@
 
 *.csv
 *.tab
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.log
+*.err

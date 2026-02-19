@@ -1,5 +1,5 @@
 """
-GraphRag_PrimeKG.py
+Backend/graphrag.py
 ────────────────────────────────────────────────────────────────
 PGx Knowledge-Graph × GraphRAG (neo4j-graphrag pipeline)
 
@@ -20,15 +20,14 @@ from __future__ import annotations
 
 import os
 import sys
-import textwrap
 from typing import Any, Optional
 
-# ── env ──────────────────────────────────────────────────────────────────────
+# ── env ───────────────────────────────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass  # fall through to raw os.getenv
+    pass
 
 # ── third-party ───────────────────────────────────────────────────────────────
 try:
@@ -171,6 +170,47 @@ CYPHER: dict[str, str] = {
     """,
 }
 
+# ── focused path Cypher (scoped to one drug + one gene) ───────────────────────
+_DRUG_GENE_HOPS: dict[int, str] = {
+    1: """
+        MATCH (g:PharmacogeneCore {name: $gene})-[r:DRUG_PROTEIN]-(d:Drug {name: $drug})
+        RETURN g.name AS gene, type(r) AS rel, d.name AS drug, 1 AS hops
+    """,
+    2: """
+        MATCH (g:PharmacogeneCore {name: $gene})-[r1]-(mid)-[r2:DRUG_PROTEIN|DRUG_DRUG]-(d:Drug {name: $drug})
+        WHERE mid.hop = 1
+        RETURN g.name AS gene, type(r1) AS rel1,
+               mid.name AS intermediate, labels(mid)[0] AS mid_type,
+               type(r2) AS rel2, d.name AS drug, 2 AS hops
+    """,
+    3: """
+        MATCH (g:PharmacogeneCore {name: $gene})-[r1]-(n1)-[r2]-(n2)-[r3:DRUG_PROTEIN|DRUG_DRUG|DRUG_EFFECT]-(d:Drug {name: $drug})
+        WHERE n1.hop = 1 AND n2.hop = 2
+        RETURN g.name AS gene, type(r1) AS rel1,
+               n1.name AS hop1_node, labels(n1)[0] AS hop1_type,
+               type(r2) AS rel2,
+               n2.name AS hop2_node, labels(n2)[0] AS hop2_type,
+               type(r3) AS rel3, d.name AS drug, 3 AS hops
+    """,
+}
+
+_DRUG_SEARCH_CYPHER = """
+    MATCH (d:Drug)
+    WHERE toLower(d.name) CONTAINS toLower($q) AND d.name IS NOT NULL
+    RETURN DISTINCT d.name AS name
+    ORDER BY d.name
+    LIMIT 20
+"""
+
+_DRUG_GENE_SHORTPATH = """
+    MATCH (g:PharmacogeneCore {name: $gene}), (d:Drug {name: $drug})
+    MATCH p = shortestPath((g)-[*..5]-(d))
+    RETURN [n IN nodes(p) | n.name]          AS path_nodes,
+           [n IN nodes(p) | labels(n)[0]]    AS path_types,
+           [r IN relationships(p) | type(r)] AS path_rels,
+           length(p)                         AS hops
+"""
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  NEO4J HELPERS
@@ -214,7 +254,6 @@ def extract_entities(question: str, caches: _EntityCache) -> dict[str, list[str]
     found_genes = [g for g in caches["genes"] if g.lower() in q_lower]
     found_drugs = [d for d in caches["drugs"] if d.lower() in q_lower]
 
-    # fallback: if only partial gene keywords exist, try seed gene names
     if not found_genes:
         found_genes = [g for g in SEED_GENES if g.lower() in q_lower]
 
@@ -244,7 +283,6 @@ class PGxLLM(LLMInterface):
         if not self._groq_client:
             print("[LLM] Groq key not set — will use Ollama only.")
 
-    # ── internal helpers ──────────────────────────────────────────────────────
     def _groq(self, prompt: str, system: str) -> str:
         resp = self._groq_client.chat.completions.create(
             model=GROQ_MODEL,
@@ -269,7 +307,6 @@ class PGxLLM(LLMInterface):
         )
         return resp["message"]["content"]
 
-    # ── neo4j-graphrag interface ──────────────────────────────────────────────
     def invoke(
         self,
         input: str,
@@ -318,7 +355,6 @@ class PGxRetriever(Retriever):
         self.limit    = limit
         self._caches  = load_entity_caches(driver)
 
-    # ── public interface ──────────────────────────────────────────────────────
     def search(self, query_text: str, **kwargs) -> RetrieverResult:  # type: ignore[override]
         entities = extract_entities(query_text, self._caches)
         rows: list[dict] = []
@@ -365,7 +401,6 @@ class PGxRetriever(Retriever):
         context = self._format(rows, entities)
         return RetrieverResult(items=[RetrieverResultItem(content=context)])
 
-    # ── context formatter ─────────────────────────────────────────────────────
     @staticmethod
     def _format(rows: list[dict], entities: dict) -> str:
         if not rows:
@@ -379,7 +414,6 @@ class PGxRetriever(Retriever):
         for r in rows:
             hops = r.get("hops")
 
-            # ── shortest-path rows have a path_nodes key – handle first ───────
             if "path_nodes" in r:
                 path_str = " → ".join(
                     f"{n} ({t})"
@@ -389,7 +423,6 @@ class PGxRetriever(Retriever):
                     f"  • [SHORTEST PATH {r['hops']} hops]  {path_str}\n"
                     f"    rels: {r['path_rels']}"
                 )
-
             elif hops == 1 and "gene" in r:
                 hop1.append(
                     f"  • {r['gene']} --[{r['relationship']}]--> {r['drug']}"
@@ -445,52 +478,8 @@ class PGxRetriever(Retriever):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PUBLIC API  —  build pipeline
-# ══════════════════════════════════════════════════════════════════════════════
-# ══════════════════════════════════════════════════════════════════════════════
 #  FOCUSED PATH API  —  scoped to one drug + one gene
 # ══════════════════════════════════════════════════════════════════════════════
-_DRUG_GENE_HOPS: dict[int, str] = {
-    1: """
-        MATCH (g:PharmacogeneCore {name: $gene})-[r:DRUG_PROTEIN]-(d:Drug {name: $drug})
-        RETURN g.name AS gene, type(r) AS rel, d.name AS drug, 1 AS hops
-    """,
-    2: """
-        MATCH (g:PharmacogeneCore {name: $gene})-[r1]-(mid)-[r2:DRUG_PROTEIN|DRUG_DRUG]-(d:Drug {name: $drug})
-        WHERE mid.hop = 1
-        RETURN g.name AS gene, type(r1) AS rel1,
-               mid.name AS intermediate, labels(mid)[0] AS mid_type,
-               type(r2) AS rel2, d.name AS drug, 2 AS hops
-    """,
-    3: """
-        MATCH (g:PharmacogeneCore {name: $gene})-[r1]-(n1)-[r2]-(n2)-[r3:DRUG_PROTEIN|DRUG_DRUG|DRUG_EFFECT]-(d:Drug {name: $drug})
-        WHERE n1.hop = 1 AND n2.hop = 2
-        RETURN g.name AS gene, type(r1) AS rel1,
-               n1.name AS hop1_node, labels(n1)[0] AS hop1_type,
-               type(r2) AS rel2,
-               n2.name AS hop2_node, labels(n2)[0] AS hop2_type,
-               type(r3) AS rel3, d.name AS drug, 3 AS hops
-    """,
-}
-
-_DRUG_SEARCH_CYPHER = """
-    MATCH (d:Drug)
-    WHERE toLower(d.name) CONTAINS toLower($q) AND d.name IS NOT NULL
-    RETURN DISTINCT d.name AS name
-    ORDER BY d.name
-    LIMIT 20
-"""
-
-_DRUG_GENE_SHORTPATH = """
-    MATCH (g:PharmacogeneCore {name: $gene}), (d:Drug {name: $drug})
-    MATCH p = shortestPath((g)-[*..5]-(d))
-    RETURN [n IN nodes(p) | n.name]          AS path_nodes,
-           [n IN nodes(p) | labels(n)[0]]    AS path_types,
-           [r IN relationships(p) | type(r)] AS path_rels,
-           length(p)                         AS hops
-"""
-
-
 def search_drugs(driver: neo4j.Driver, q: str) -> list[str]:
     """Return up to 20 drug names matching substring q."""
     rows = run_query(driver, _DRUG_SEARCH_CYPHER, {"q": q})
@@ -525,7 +514,6 @@ def path_drug_gene(
 
     shortest = run_query(driver, _DRUG_GENE_SHORTPATH, {"drug": drug, "gene": gene})
 
-    # walk from requested hops upward until we find something
     effective_hop = hops
     rows: list[dict] = []
     for h in range(hops, max_hops + 1):
@@ -535,17 +523,20 @@ def path_drug_gene(
             break
 
     return {
-        "drug":           drug,
-        "gene":           gene,
-        "requested_hop":  hops,
-        "effective_hop":  effective_hop,
-        "escalated":      effective_hop > hops and bool(rows),
-        "paths":          rows,
-        "shortest":       shortest,
-        "found":          bool(rows) or bool(shortest),
+        "drug":          drug,
+        "gene":          gene,
+        "requested_hop": hops,
+        "effective_hop": effective_hop,
+        "escalated":     effective_hop > hops and bool(rows),
+        "paths":         rows,
+        "shortest":      shortest,
+        "found":         bool(rows) or bool(shortest),
     }
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  PUBLIC API  —  build pipeline
+# ══════════════════════════════════════════════════════════════════════════════
 def build_pipeline(max_hops: int = 3) -> tuple[GraphRAG, neo4j.Driver]:
     """
     Returns a configured (GraphRAG, driver) pair.
@@ -561,92 +552,3 @@ def build_pipeline(max_hops: int = 3) -> tuple[GraphRAG, neo4j.Driver]:
     retriever = PGxRetriever(driver, max_hops=max_hops)
     pipeline  = GraphRAG(llm=llm, retriever=retriever)
     return pipeline, driver
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CLI
-# ══════════════════════════════════════════════════════════════════════════════
-_BANNER = """
-╔══════════════════════════════════════════════════════════════════╗
-║         PGx GraphRAG  –  PrimeKG Drug / Gene Analyser           ║
-║  LLM  : Groq llama-3.3-70b  →  fallback Ollama qwen2.5:7b       ║
-║  DB   : Neo4j `drugs`  (localhost:7687)                         ║
-║  Hops : 1–3   |   All Cypher hardcoded (no LLM generation)      ║
-╚══════════════════════════════════════════════════════════════════╝
-Commands:
-  :hops <1|2|3>  — change multi-hop depth  (default: 3)
-  :ctx           — toggle showing raw graph context
-  :quit          — exit
-"""
-
-
-def main() -> None:
-    print(_BANNER)
-    driver    = get_driver()
-    llm       = PGxLLM()
-    retriever = PGxRetriever(driver, max_hops=3)
-    show_ctx  = False
-
-    try:
-        while True:
-            try:
-                raw = input("Question > ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print("\nBye.")
-                break
-
-            if not raw:
-                continue
-
-            # ── commands ──────────────────────────────────────────────────────
-            if raw.startswith(":quit"):
-                print("Bye.")
-                break
-
-            if raw.startswith(":hops"):
-                parts = raw.split()
-                if len(parts) == 2 and parts[1].isdigit():
-                    retriever.max_hops = int(parts[1])
-                    print(f"  → max_hops = {retriever.max_hops}")
-                else:
-                    print("  Usage: :hops 1|2|3")
-                continue
-
-            if raw == ":ctx":
-                show_ctx = not show_ctx
-                print(f"  → show raw context = {show_ctx}")
-                continue
-
-            # ── retrieve ──────────────────────────────────────────────────────
-            print("  Retrieving graph context …", flush=True)
-            ret_result = retriever.search(raw)
-            ctx = ret_result.items[0].content if ret_result.items else "(no context)"
-
-            if show_ctx:
-                print("\n" + "─" * 68)
-                print(ctx)
-                print("─" * 68 + "\n")
-
-            # ── generate  (single LLM call — context injected directly) ──────
-            print("  Querying LLM …", flush=True)
-            prompt = (
-                f"GRAPH CONTEXT:\n{ctx}\n\n"
-                f"QUESTION: {raw}\n\n"
-                "Answer using ONLY the graph context above. "
-                "Reference hop distances, relationship types, and specific "
-                "gene/drug names."
-            )
-            answer = llm.invoke(prompt).content
-
-            print("\n" + "─" * 68)
-            # wrap long lines but preserve existing newlines
-            for line in answer.splitlines():
-                print(textwrap.fill(line, width=80) if len(line) > 80 else line)
-            print("─" * 68 + "\n")
-
-    finally:
-        driver.close()
-
-
-if __name__ == "__main__":
-    main()
