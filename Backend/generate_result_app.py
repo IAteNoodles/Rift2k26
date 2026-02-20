@@ -31,9 +31,10 @@ except ImportError:
     pass
 
 try:
-    from fastapi import FastAPI, HTTPException, Request
+    from fastapi import FastAPI, HTTPException, Request, Body
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import ValidationError
+    from typing import Any, Annotated
     import uvicorn
 except ImportError:
     sys.exit("Install with:  pip install fastapi uvicorn")
@@ -227,18 +228,10 @@ app.add_middleware(
 
 
 @app.post("/generate_result", response_model=list[PerDrugOutput])
-async def generate_result(request: Request) -> list[PerDrugOutput]:
-    try:
-        body = await request.body()
-        data = json.loads(body) if body.strip() else {}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}") from exc
-
-    # Fast path — use directly if it already fits
+async def generate_result(data: Annotated[Any, Body()]) -> list[PerDrugOutput]:
     try:
         payload = GenerateResultRequest(**data)
     except Exception:
-        # Doesn't fit — let LLM coerce section by section
         try:
             payload = _coerce_to_request(data)
         except HTTPException:
