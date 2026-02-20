@@ -2,39 +2,49 @@ import { useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { buildExportJSON } from '../data/mockData';
 import './ExportBar.css';
 
-export default function ExportBar({ selectedDrugs }) {
+export default function ExportBar({ apiResults }) {
   const [copied, setCopied] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  const exportData = useMemo(() => {
+    if (!apiResults) return null;
+    return {
+      reportDate: new Date().toISOString(),
+      patientId: apiResults[0]?.patient_id || 'Unknown',
+      drugCount: apiResults.length,
+      results: apiResults,
+    };
+  }, [apiResults]);
+
   const jsonString = useMemo(
-    () => JSON.stringify(buildExportJSON(selectedDrugs), null, 2),
-    [selectedDrugs]
+    () => exportData ? JSON.stringify(exportData, null, 2) : '{}',
+    [exportData]
   );
 
   const downloadJSON = useCallback(() => {
-    const data = buildExportJSON(selectedDrugs);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    if (!exportData) return;
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `pgx_report_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [selectedDrugs]);
+  }, [exportData]);
 
   const copyToClipboard = useCallback(async () => {
-    const data = buildExportJSON(selectedDrugs);
+    if (!exportData) return;
+    const text = JSON.stringify(exportData, null, 2);
     try {
-      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback
       const textarea = document.createElement('textarea');
-      textarea.value = JSON.stringify(data, null, 2);
+      textarea.value = text;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -42,7 +52,7 @@ export default function ExportBar({ selectedDrugs }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [selectedDrugs]);
+  }, [exportData]);
 
   return (
     <motion.div

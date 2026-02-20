@@ -1,8 +1,14 @@
 import { useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { getDrugInfo, getDrugRiskTier } from '../data/mockData';
 import './DrugDetailAccordion.css';
+
+function riskLabelToTier(label) {
+  const l = (label || '').toLowerCase();
+  if (l === 'toxic' || l === 'ineffective') return 'avoid';
+  if (l === 'adjust dosage' || l === 'unknown') return 'caution';
+  return 'routine';
+}
 
 const tierDot = {
   avoid:   'var(--rose)',
@@ -16,8 +22,10 @@ const tierLabel = {
   routine: 'Routine'
 };
 
-export default function DrugDetailAccordion({ selectedDrugs }) {
+export default function DrugDetailAccordion({ apiResults }) {
   const [openDrug, setOpenDrug] = useState(null);
+
+  if (!apiResults || apiResults.length === 0) return null;
 
   const toggle = (drug) => {
     setOpenDrug(prev => prev === drug ? null : drug);
@@ -38,10 +46,24 @@ export default function DrugDetailAccordion({ selectedDrugs }) {
       </p>
 
       <div className="accordion-list">
-        {selectedDrugs.map((drug, i) => {
-          const info = getDrugInfo(drug);
-          const tier = getDrugRiskTier(drug);
+        {apiResults.map((result, i) => {
+          const drug = result.drug;
+          const profile = result.pharmacogenomic_profile || {};
+          const risk = result.risk_assessment || {};
+          const rec = result.clinical_recommendation || {};
+          const llm = result.llm_generated_explanation || {};
+          const tier = riskLabelToTier(risk.risk_label);
           const isOpen = openDrug === drug;
+
+          const gene = profile.primary_gene || '—';
+          const diplotype = profile.diplotype || '—';
+          const phenotype = profile.phenotype || '—';
+
+          // Build guideline info from clinical_recommendation
+          const guidelineSource = rec.source || '—';
+          const summary = llm.summary || rec.cpic_update || 'No clinical summary available.';
+          const recommendation = rec.drug_recommendation || rec.cpic_update || 'No specific recommendation available.';
+          const classification = rec.classification || null;
 
           return (
             <motion.div
@@ -61,7 +83,7 @@ export default function DrugDetailAccordion({ selectedDrugs }) {
                   <span className={`tier-badge tier-badge--${tier}`}>{tierLabel[tier]}</span>
                 </div>
                 <div className="accordion-header-right">
-                  <span className="accordion-gene">{info.gene}</span>
+                  <span className="accordion-gene">{gene}</span>
                   <svg
                     className={`accordion-chevron ${isOpen ? 'accordion-chevron--open' : ''}`}
                     width="16" height="16" viewBox="0 0 16 16" fill="none"
@@ -85,35 +107,53 @@ export default function DrugDetailAccordion({ selectedDrugs }) {
                       <div className="drug-meta-grid">
                         <div className="drug-meta-item">
                           <span className="drug-meta-label">Gene(s)</span>
-                          <span className="drug-meta-value">{info.gene}</span>
+                          <span className="drug-meta-value">{gene}</span>
                         </div>
                         <div className="drug-meta-item">
                           <span className="drug-meta-label">Diplotype</span>
-                          <span className="drug-meta-value mono">{info.diplotype}</span>
+                          <span className="drug-meta-value mono">{diplotype}</span>
                         </div>
                         <div className="drug-meta-item">
                           <span className="drug-meta-label">Phenotype</span>
-                          <span className="drug-meta-value">{info.phenotype}</span>
+                          <span className="drug-meta-value">{phenotype}</span>
+                        </div>
+                        <div className="drug-meta-item">
+                          <span className="drug-meta-label">Risk Level</span>
+                          <span className="drug-meta-value">{risk.risk_label || '—'} ({risk.severity || '—'})</span>
+                        </div>
+                        <div className="drug-meta-item">
+                          <span className="drug-meta-label">Confidence</span>
+                          <span className="drug-meta-value">{risk.confidence_score != null ? `${(risk.confidence_score * 100).toFixed(0)}%` : '—'}</span>
                         </div>
                       </div>
 
-                      {/* Guidelines */}
+                      {/* Guideline */}
                       <div className="guidelines-list">
-                        {info.guidelines.map((gl, idx) => (
-                          <div key={idx} className="guideline-card">
-                            <div className="guideline-source-row">
-                              <span className="guideline-source">{gl.source}</span>
-                              <a href={gl.url} target="_blank" rel="noopener noreferrer" className="guideline-link">
-                                PharmGKB →
-                              </a>
-                            </div>
-                            <p className="guideline-summary">{gl.summary}</p>
+                        <div className="guideline-card">
+                          <div className="guideline-source-row">
+                            <span className="guideline-source">{guidelineSource}</span>
+                            {classification && (
+                              <span className="guideline-source" style={{ marginLeft: '8px', opacity: 0.7 }}>
+                                {classification}
+                              </span>
+                            )}
+                          </div>
+                          <p className="guideline-summary">{summary}</p>
+                          {rec.drug_recommendation && (
                             <div className="guideline-rec">
                               <span className="guideline-rec-label">Recommendation</span>
-                              <p className="guideline-rec-text">{gl.recommendation}</p>
+                              <p className="guideline-rec-text">{recommendation}</p>
                             </div>
-                          </div>
-                        ))}
+                          )}
+                          {rec.implications && Object.keys(rec.implications).length > 0 && (
+                            <div className="guideline-rec">
+                              <span className="guideline-rec-label">Implications</span>
+                              {Object.entries(rec.implications).map(([gene, text]) => (
+                                <p key={gene} className="guideline-rec-text"><strong>{gene}:</strong> {text}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </motion.div>

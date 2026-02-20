@@ -1,6 +1,5 @@
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-import { PHENOTYPE_PREDICTIONS } from '../data/mockData';
 import './PhenotypeGrid.css';
 
 const indicators = {
@@ -12,12 +11,36 @@ const indicators = {
 
 const columns = ['toxicity', 'dosage', 'efficacy', 'metabolism'];
 
-export default function PhenotypeGrid({ selectedDrugs }) {
-  const drugsWithPredictions = selectedDrugs.filter(
-    d => PHENOTYPE_PREDICTIONS[d.toLowerCase()]
-  );
+/* Derive phenotype prediction from backend result */
+function derivePrediction(result) {
+  const riskLabel = (result.risk_assessment?.risk_label || '').toLowerCase();
+  const phenotype = (result.pharmacogenomic_profile?.phenotype || '').toLowerCase();
 
-  if (drugsWithPredictions.length === 0) return null;
+  // Toxicity
+  let toxicity = 'normal';
+  if (riskLabel === 'toxic') toxicity = 'increased';
+
+  // Dosage
+  let dosage = 'normal';
+  if (riskLabel === 'adjust dosage') dosage = 'decreased';
+
+  // Efficacy
+  let efficacy = 'normal';
+  if (riskLabel === 'ineffective') efficacy = 'decreased';
+
+  // Metabolism — based on phenotype
+  let metabolism = 'normal';
+  if (phenotype.includes('poor') || phenotype === 'pm') metabolism = 'decreased';
+  else if (phenotype.includes('intermediate') || phenotype === 'im') metabolism = 'decreased';
+  else if (phenotype.includes('rapid') || phenotype === 'rm') metabolism = 'increased';
+  else if (phenotype.includes('ultrarapid') || phenotype === 'urm') metabolism = 'increased';
+  else if (phenotype === 'unknown' || phenotype === 'indeterminate' || !phenotype) metabolism = 'na';
+
+  return { toxicity, dosage, efficacy, metabolism };
+}
+
+export default function PhenotypeGrid({ apiResults }) {
+  if (!apiResults || apiResults.length === 0) return null;
 
   return (
     <section id="phenotype-grid" className="phenotype-section">
@@ -59,11 +82,11 @@ export default function PhenotypeGrid({ selectedDrugs }) {
             </tr>
           </thead>
           <tbody>
-            {drugsWithPredictions.map(drug => {
-              const pred = PHENOTYPE_PREDICTIONS[drug.toLowerCase()];
+            {apiResults.map(result => {
+              const pred = derivePrediction(result);
               return (
-                <tr key={drug} className="pheno-row">
-                  <td className="pheno-td-drug">{drug}</td>
+                <tr key={result.drug} className="pheno-row">
+                  <td className="pheno-td-drug">{result.drug}</td>
                   {columns.map(col => {
                     const val = pred[col] || 'na';
                     const ind = indicators[val];

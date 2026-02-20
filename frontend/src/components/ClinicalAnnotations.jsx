@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-import { CLINICAL_ANNOTATIONS } from '../data/mockData';
 import './ClinicalAnnotations.css';
 
 const levelColors = {
@@ -9,22 +8,56 @@ const levelColors = {
   '1B': 'level-1',
   '2A': 'level-2',
   '2B': 'level-2',
+  'Strong': 'level-1',
+  'Moderate': 'level-2',
 };
 
-export default function ClinicalAnnotations({ selectedDrugs }) {
+/* Derive a category from the risk label */
+function deriveCategory(riskLabel) {
+  const l = (riskLabel || '').toLowerCase();
+  if (l === 'toxic') return 'Toxicity';
+  if (l === 'adjust dosage') return 'Dosage';
+  if (l === 'ineffective') return 'Efficacy';
+  if (l === 'safe') return 'Dosage';
+  return 'Dosage';
+}
+
+/* Build annotation rows from apiResults */
+function buildAnnotations(apiResults) {
+  if (!apiResults) return [];
+  return apiResults.map(result => {
+    const profile = result.pharmacogenomic_profile || {};
+    const risk = result.risk_assessment || {};
+    const rec = result.clinical_recommendation || {};
+    const variants = profile.detected_variants || [];
+
+    return {
+      drug: result.drug,
+      category: deriveCategory(risk.risk_label),
+      gene: profile.primary_gene || '—',
+      variant: variants.length > 0 ? variants[0].rsid : '—',
+      diplotype: profile.diplotype || '—',
+      level: rec.classification || '—',
+      phenotype: profile.phenotype || '—',
+      source: rec.source || null,
+      guideline: rec.guideline_name || null,
+    };
+  });
+}
+
+export default function ClinicalAnnotations({ apiResults }) {
   const [sortByLevel, setSortByLevel] = useState(true);
 
   const annotations = useMemo(() => {
-    const selected = new Set(selectedDrugs.map(d => d.toLowerCase()));
-    let result = CLINICAL_ANNOTATIONS.filter(a => selected.has(a.drug.toLowerCase()));
+    let result = buildAnnotations(apiResults);
 
     if (sortByLevel) {
-      const levelOrder = { '1A': 0, '1B': 1, '2A': 2, '2B': 3 };
-      result = [...result].sort((a, b) => (levelOrder[a.level] || 9) - (levelOrder[b.level] || 9));
+      const levelOrder = { 'Strong': 0, '1A': 0, '1B': 1, 'Moderate': 2, '2A': 2, '2B': 3 };
+      result = [...result].sort((a, b) => (levelOrder[a.level] ?? 9) - (levelOrder[b.level] ?? 9));
     }
 
     return result;
-  }, [selectedDrugs, sortByLevel]);
+  }, [apiResults, sortByLevel]);
 
   if (annotations.length === 0) return null;
 
@@ -40,7 +73,7 @@ export default function ClinicalAnnotations({ selectedDrugs }) {
       </motion.h2>
       <div className="section-desc-row">
         <p className="section-desc">
-          Evidence-based clinical annotations from PharmGKB for selected drugs.
+          Evidence-based clinical annotations derived from pharmacogenomic analysis.
         </p>
         <button
           className="sort-toggle"
@@ -66,7 +99,7 @@ export default function ClinicalAnnotations({ selectedDrugs }) {
               <th>Diplotype</th>
               <th>Evidence</th>
               <th>Phenotype</th>
-              <th>PharmGKB</th>
+              <th>Source</th>
             </tr>
           </thead>
           <tbody>
@@ -78,21 +111,12 @@ export default function ClinicalAnnotations({ selectedDrugs }) {
                 <td className="annot-variant">{a.variant}</td>
                 <td className="annot-diplotype">{a.diplotype}</td>
                 <td>
-                  <span className={`evidence-badge ${levelColors[a.level]}`}>
+                  <span className={`evidence-badge ${levelColors[a.level] || ''}`}>
                     {a.level}
                   </span>
                 </td>
                 <td className="annot-phenotype">{a.phenotype}</td>
-                <td>
-                  <a
-                    href={`https://www.pharmgkb.org/guidelineAnnotation/${a.pgkbId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="pgkb-link"
-                  >
-                    {a.pgkbId}
-                  </a>
-                </td>
+                <td className="annot-source">{a.source || '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -1,7 +1,20 @@
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-import { RISK_TIERS, getDrugRiskTier } from '../data/mockData';
 import './RiskSummary.css';
+
+/* Map backend risk_label to a 3-tier classification */
+function riskLabelToTier(label) {
+  const l = (label || '').toLowerCase();
+  if (l === 'toxic' || l === 'ineffective') return 'avoid';
+  if (l === 'adjust dosage' || l === 'unknown') return 'caution';
+  return 'routine'; // "Safe" and anything else
+}
+
+const TIER_DESCRIPTIONS = {
+  avoid: "These drugs should be avoided based on the patient's genetic profile. Alternative medications are strongly recommended.",
+  caution: 'Dose adjustments or enhanced monitoring may be required. Consult prescribing guidelines.',
+  routine: 'No pharmacogenomic-based prescribing changes are recommended. Standard dosing applies.',
+};
 
 const tierConfig = {
   avoid:   {
@@ -47,13 +60,17 @@ const tierConfig = {
   }
 };
 
-export default function RiskSummary({ selectedDrugs }) {
-  // Classify selected drugs into tiers
+export default function RiskSummary({ apiResults }) {
+  if (!apiResults || apiResults.length === 0) return null;
+
+  // Classify drugs into tiers from real API data
   const tiers = { avoid: [], caution: [], routine: [] };
-  selectedDrugs.forEach(drug => {
-    const tier = getDrugRiskTier(drug);
-    tiers[tier].push(drug);
+  apiResults.forEach(result => {
+    const tier = riskLabelToTier(result.risk_assessment?.risk_label);
+    tiers[tier].push(result.drug);
   });
+
+  const totalDrugs = apiResults.length;
 
   return (
     <section id="risk-summary" className="risk-summary">
@@ -66,7 +83,7 @@ export default function RiskSummary({ selectedDrugs }) {
         Risk Assessment Summary
       </motion.h2>
       <p className="section-desc">
-        Drug classification based on {selectedDrugs.length} selected medication{selectedDrugs.length !== 1 ? 's' : ''} and patient genotype.
+        Drug classification based on {totalDrugs} selected medication{totalDrugs !== 1 ? 's' : ''} and patient genotype.
       </p>
 
       <div className="risk-cards">
@@ -114,7 +131,7 @@ export default function RiskSummary({ selectedDrugs }) {
                 <p className="risk-card-empty">No drugs in this category</p>
               )}
 
-              <p className="risk-card-desc">{RISK_TIERS[tier].description}</p>
+              <p className="risk-card-desc">{TIER_DESCRIPTIONS[tier]}</p>
             </motion.div>
           );
         })}

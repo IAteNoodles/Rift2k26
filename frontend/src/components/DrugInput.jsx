@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { DRUG_LIST } from '../data/mockData';
 import './DrugInput.css';
 
-export default function DrugInput({ selectedDrugs, onDrugsChange, disabled }) {
+export default function DrugInput({ selectedDrugs, onDrugsChange, disabled, drugList = [] }) {
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
@@ -12,8 +11,8 @@ export default function DrugInput({ selectedDrugs, onDrugsChange, disabled }) {
   const dropdownRef = useRef(null);
 
   const normalizedList = useMemo(() =>
-    DRUG_LIST.map(d => d.toLowerCase()).sort(),
-    []
+    drugList.map(d => d.toLowerCase()).sort(),
+    [drugList]
   );
 
   const filtered = useMemo(() => {

@@ -162,18 +162,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Footer */
-.sidebar-footer {
-  margin-top: auto;
-  padding-top: var(--space-6);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
 
-.sidebar-footer p {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
-  margin-bottom: 2px;
-}
 
 /* Mobile */
 @media (max-width: 768px) {

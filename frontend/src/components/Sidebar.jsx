@@ -52,7 +52,7 @@ export default function Sidebar({ appState }) {
             </svg>
           </div>
           <div>
-            <h1 className="logo-text">Rift PGx</h1>
+            <h1 className="logo-text">PharmaGuard</h1>
             <span className="logo-sub">Pharmacogenomics</span>
           </div>
         </div>
@@ -110,12 +110,7 @@ export default function Sidebar({ appState }) {
           </motion.nav>
         )}
 
-        {/* Footer info */}
-        <div className="sidebar-footer">
-          <p>PAnno v0.3.1</p>
-          <p>Sample: HG00096</p>
-          <p>GRCh38</p>
-        </div>
+
       </motion.div>
     </aside>
   );
