@@ -173,28 +173,62 @@ flowchart LR
 PharmaGuard analyzes 6 pharmacogenes that have well-established, clinically actionable drug interactions per CPIC guidelines:
 
 ```mermaid
-mindmap
-  root((PharmaGuard))
-    DPYD
-      Fluorouracil
-      Capecitabine
-      Tegafur
-    SLCO1B1
-      Simvastatin
-      Atorvastatin
-      Rosuvastatin
-    CYP2D6
-      Codeine
-      Tramadol
-    CYP2C19
-      Clopidogrel
-    TPMT
-      Azathioprine
-      Mercaptopurine
-      Thioguanine
-    CYP2C9
-      Warfarin
-      Phenytoin
+flowchart LR
+    PG["🧬 PharmaGuard"]
+
+    DPYD["<b>DPYD</b><br/>Chemotherapy Metabolism"]
+    SLCO1B1["<b>SLCO1B1</b><br/>Statin Uptake"]
+    CYP2D6["<b>CYP2D6</b><br/>Pain Med Metabolism"]
+    CYP2C19["<b>CYP2C19</b><br/>Antiplatelet Activation"]
+    TPMT["<b>TPMT</b><br/>Immunosuppressant Metabolism"]
+    CYP2C9["<b>CYP2C9</b><br/>Anticoagulant Metabolism"]
+
+    D1["Fluorouracil"]
+    D2["Capecitabine"]
+    D3["Tegafur"]
+    D4["Simvastatin"]
+    D5["Atorvastatin"]
+    D6["Rosuvastatin"]
+    D7["Codeine"]
+    D8["Tramadol"]
+    D9["Clopidogrel"]
+    D10["Azathioprine"]
+    D11["Mercaptopurine"]
+    D12["Thioguanine"]
+    D13["Warfarin"]
+    D14["Phenytoin"]
+
+    PG --> DPYD & SLCO1B1 & CYP2D6 & CYP2C19 & TPMT & CYP2C9
+
+    DPYD --> D1 & D2 & D3
+    SLCO1B1 --> D4 & D5 & D6
+    CYP2D6 --> D7 & D8
+    CYP2C19 --> D9
+    TPMT --> D10 & D11 & D12
+    CYP2C9 --> D13 & D14
+
+    style PG fill:#1e293b,stroke:#334155,color:#f8fafc,stroke-width:2px
+    style DPYD fill:#7c3aed,stroke:#6d28d9,color:#f5f3ff,stroke-width:2px
+    style SLCO1B1 fill:#2563eb,stroke:#1d4ed8,color:#eff6ff,stroke-width:2px
+    style CYP2D6 fill:#0891b2,stroke:#0e7490,color:#ecfeff,stroke-width:2px
+    style CYP2C19 fill:#059669,stroke:#047857,color:#ecfdf5,stroke-width:2px
+    style TPMT fill:#d97706,stroke:#b45309,color:#fffbeb,stroke-width:2px
+    style CYP2C9 fill:#dc2626,stroke:#b91c1c,color:#fef2f2,stroke-width:2px
+
+    style D1 fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    style D2 fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    style D3 fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    style D4 fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    style D5 fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    style D6 fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    style D7 fill:#cffafe,stroke:#0891b2,color:#164e63
+    style D8 fill:#cffafe,stroke:#0891b2,color:#164e63
+    style D9 fill:#d1fae5,stroke:#059669,color:#064e3b
+    style D10 fill:#fef3c7,stroke:#d97706,color:#78350f
+    style D11 fill:#fef3c7,stroke:#d97706,color:#78350f
+    style D12 fill:#fef3c7,stroke:#d97706,color:#78350f
+    style D13 fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    style D14 fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
 ```
 
 ### Why These Genes?
