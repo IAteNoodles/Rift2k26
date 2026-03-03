@@ -12,7 +12,7 @@ import ExportBar from './components/ExportBar';
 import ErrorBanner from './components/ErrorBanner';
 import './App.css';
 
-const API_URL = '/api';
+const API_URL = '52.140.125.36:8080';
 
 /*
   State machine: idle → fileUploaded → drugsSelected → analyzing → results
